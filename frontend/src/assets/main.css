@@ -1,0 +1,37 @@
+@import './base.css';
+
+/* Убираем конфликтующие стили для #app */
+#app {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+/* Переопределяем проблемные media queries */
+@media (min-width: 1024px) {
+  body {
+    display: block;
+    place-items: initial;
+  }
+
+  #app {
+    display: block;
+    grid-template-columns: none;
+    padding: 0;
+    max-width: 100%;
+  }
+}
