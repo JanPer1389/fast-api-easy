@@ -1,0 +1,22 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cashe-dir -r requirements.txt
+
+COPY backend/ .
+
+RUN mkdir -p static/images
+
+RUN chmod -R 755 static
+
+EXPOSE 8000
+
+CMD  ["uvicorn", "main:app", "--host", "8000", "--port", "8000"]
+
