@@ -291,9 +291,11 @@ install_certbot() {
 }
 
 # Получение SSL сертификатов
+# Получение SSL сертификатов
 obtain_ssl_certificates() {
     print_step "Получение SSL сертификатов Let's Encrypt"
 
+    # Проверяем существующие сертификаты
     if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
         print_warning "Сертификаты для $DOMAIN уже существуют"
         read -p "Перевыпустить сертификаты? (y/n): " -n 1 -r
@@ -304,38 +306,141 @@ obtain_ssl_certificates() {
         fi
     fi
 
-    mkdir -p certbot/www
+    # Создаем необходимые директории
+    mkdir -p certbot/www/.well-known/acme-challenge
+    chmod -R 755 certbot/www
+
+    # Проверяем, занят ли порт 80
+    print_info "Проверка порта 80..."
+    if lsof -Pi :80 -sTCP:LISTEN -t >/dev/null 2>&1; then
+        print_warning "Порт 80 занят. Освобождаем..."
+        PIDS=$(lsof -Pi :80 -sTCP:LISTEN -t)
+        for PID in $PIDS; do
+            kill -9 $PID 2>/dev/null || true
+        done
+        sleep 2
+    fi
 
     print_info "Запуск временного веб-сервера для верификации домена..."
-
-    docker run --rm -d \
+    
+    # Удаляем старый контейнер, если существует
+    docker rm -f nginx_certbot_temp 2>/dev/null || true
+    
+    # Запускаем временный Nginx контейнер с улучшенной диагностикой
+    if docker run --rm -d \
         --name nginx_certbot_temp \
         -p 80:80 \
-        -v "$(pwd)/certbot/www:/usr/share/nginx/html" \
-        nginx:alpine > /dev/null 2>&1
-
-    sleep 3
+        -v "$(pwd)/certbot/www:/usr/share/nginx/html:ro" \
+        nginx:alpine > /dev/null 2>&1; then
+        
+        print_success "Временный веб-сервер запущен"
+        
+        # Проверяем, что контейнер работает
+        sleep 3
+        
+        if docker ps | grep -q nginx_certbot_temp; then
+            print_success "Контейнер nginx_certbot_temp запущен успешно"
+            
+            # Проверяем доступность изнутри контейнера
+            print_info "Проверка работы веб-сервера..."
+            sleep 2
+            
+            # Создаем тестовый файл для проверки
+            echo "test" > certbot/www/test.txt
+            
+            # Проверяем доступность локально
+            if curl -s http://localhost/test.txt 2>/dev/null | grep -q "test"; then
+                print_success "Веб-сервер работает корректно"
+            else
+                print_warning "Проблема с веб-сервером, но продолжаем..."
+            fi
+            
+        else
+            print_error "Контейнер не запустился"
+            print_info "Проверьте логи Docker: docker logs nginx_certbot_temp"
+            return 1
+        fi
+    else
+        print_error "Не удалось запустить временный веб-сервер"
+        print_info "Проверьте, что Docker работает: systemctl status docker"
+        return 1
+    fi
 
     print_info "Запрос сертификатов для доменов: $DOMAIN, www.$DOMAIN"
-
-    certbot certonly --webroot \
+    
+    # Показываем прогресс
+    echo -e "\n${YELLOW}Получение SSL сертификатов... Это может занять до 30 секунд${NC}"
+    
+    # Запускаем certbot с таймаутом и без тихого режима для отладки
+    if certbot certonly --webroot \
         --webroot-path="$(pwd)/certbot/www" \
         --email "$EMAIL" \
         --agree-tos \
         --no-eff-email \
         --force-renewal \
         -d "$DOMAIN" \
-        -d "www.$DOMAIN"
-
-    docker stop nginx_certbot_temp > /dev/null 2>&1 || true
-
-    if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+        -d "www.$DOMAIN" \
+        --non-interactive; then
+        
         print_success "SSL сертификаты успешно получены"
-        print_info "Сертификаты сохранены в: /etc/letsencrypt/live/$DOMAIN/"
     else
         print_error "Не удалось получить SSL сертификаты"
-        print_warning "Проверьте, что домены $DOMAIN и www.$DOMAIN указывают на этот сервер"
-        exit 1
+        print_warning "Возможные причины:"
+        print_info "1. DNS записи не настроены на этот сервер"
+        print_info "2. Домены не разрешаются на IP: $(curl -s ifconfig.me)"
+        print_info "3. Порт 80 заблокирован брандмауэром"
+        
+        # Предлагаем альтернативные варианты
+        echo -e "\n${YELLOW}Выберите действие:${NC}"
+        echo "1) Попробовать снова с отладкой"
+        echo "2) Пропустить SSL и продолжить установку (HTTP только)"
+        echo "3) Прервать установку"
+        read -p "Ваш выбор (1-3): " choice
+        
+        case $choice in
+            1)
+                # Повтор с отладкой
+                print_info "Запуск certbot с отладкой..."
+                certbot certonly --webroot \
+                    --webroot-path="$(pwd)/certbot/www" \
+                    --email "$EMAIL" \
+                    --agree-tos \
+                    --no-eff-email \
+                    --force-renewal \
+                    -d "$DOMAIN" \
+                    -d "www.$DOMAIN" \
+                    --verbose
+                ;;
+            2)
+                print_warning "Продолжаем без SSL сертификатов"
+                print_info "Вы можете получить сертификаты позже командой:"
+                print_info "certbot certonly --standalone -d $DOMAIN -d www.$DOMAIN"
+                ;;
+            3)
+                print_error "Установка прервана"
+                exit 1
+                ;;
+            *)
+                print_warning "Продолжаем без SSL сертификатов"
+                ;;
+        esac
+    fi
+
+    # Останавливаем временный контейнер
+    print_info "Остановка временного веб-сервера..."
+    docker stop nginx_certbot_temp 2>/dev/null || true
+    
+    # Проверяем, что сертификаты созданы
+    if [ -d "/etc/letsencrypt/live/$DOMAIN" ]; then
+        print_success "Сертификаты сохранены в: /etc/letsencrypt/live/$DOMAIN/"
+        
+        # Показываем информацию о сертификатах
+        echo -e "\n${CYAN}Информация о сертификатах:${NC}"
+        openssl x509 -in /etc/letsencrypt/live/$DOMAIN/fullchain.pem -noout -dates 2>/dev/null || \
+            print_warning "Не удалось проверить сертификаты"
+    else
+        print_warning "SSL сертификаты не были получены"
+        print_info "Магазин будет работать только по HTTP"
     fi
 }
 
