@@ -69,6 +69,7 @@ EOF
 }
 
 # Диалоговое меню для ввода данных
+# Диалоговое меню для ввода данных
 get_user_input() {
     print_header "НАСТРОЙКА ПАРАМЕТРОВ ПРОЕКТА"
 
@@ -101,6 +102,16 @@ get_user_input() {
     APP_NAME=${APP_NAME:-"FastAPI Shop"}
     print_success "Название: $APP_NAME"
 
+    # Опциональное обновление системы
+    echo -e "\n${BOLD}${YELLOW}Обновить систему Ubuntu? (y/n - рекомендуется n если VPS уже настроен):${NC}"
+    read -p "> " UPDATE_SYSTEM
+    UPDATE_SYSTEM=${UPDATE_SYSTEM:-"n"}
+    if [[ $UPDATE_SYSTEM =~ ^[Yy]$ ]]; then
+        print_success "Система будет обновлена"
+    else
+        print_info "Обновление системы пропущено"
+    fi
+
     # Подтверждение
     echo -e "\n${BOLD}${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo -e "${BOLD}Проверьте введенные данные:${NC}"
@@ -109,6 +120,11 @@ get_user_input() {
     echo -e "  WWW Домен:      ${GREEN}www.$DOMAIN${NC}"
     echo -e "  Email:          ${GREEN}$EMAIL${NC}"
     echo -e "  Название:       ${GREEN}$APP_NAME${NC}"
+    if [[ $UPDATE_SYSTEM =~ ^[Yy]$ ]]; then
+        echo -e "  Обновление:     ${GREEN}Да${NC}"
+    else
+        echo -e "  Обновление:     ${YELLOW}Нет${NC}"
+    fi
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}\n"
 
     read -p "Всё верно? (y/n): " -n 1 -r
@@ -166,11 +182,17 @@ EOF
 }
 
 # Обновление системы
+# Обновление системы (опционально)
 update_system() {
-    print_step "Обновление системы Ubuntu"
-    apt-get update -qq > /dev/null 2>&1
-    apt-get upgrade -y -qq > /dev/null 2>&1
-    print_success "Система обновлена"
+    if [[ $UPDATE_SYSTEM =~ ^[Yy]$ ]]; then
+        print_step "Обновление системы Ubuntu"
+        apt-get update -qq > /dev/null 2>&1
+        apt-get upgrade -y -qq > /dev/null 2>&1
+        print_success "Система обновлена"
+    else
+        print_step "Пропуск обновления системы"
+        print_info "Обновление системы пропущено по запросу пользователя"
+    fi
 }
 
 # Установка необходимых пакетов
