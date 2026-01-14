@@ -4,7 +4,7 @@ services:
   backend:
     build: 
       context: .
-      dockerfile: backend/DockerFIle
+      dockerfile: backend/DockerFile
     container_name: fashop_backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
