@@ -721,12 +721,27 @@ build_and_run_docker() {
         print_success "Старые контейнеры остановлены"
     fi
 
-    print_info "Сборка Docker образов (это может занять несколько минут)..."
-    docker compose build --no-cache > /dev/null 2>&1
-    print_success "Docker образы собраны"
+    print_info "Сборка Docker образов..."
+    echo -e "${YELLOW}Это может занять 5-10 минут...${NC}"
+    echo -e "${CYAN}Вывод сборки будет показан ниже:${NC}"
+    
+    # Запускаем сборку с видимым выводом
+    if docker compose build --no-cache; then
+        print_success "Docker образы собраны успешно"
+    else
+        print_error "Ошибка при сборке Docker образов"
+        print_info "Проверьте Dockerfile и попробуйте вручную:"
+        print_info "docker compose build --no-cache"
+        exit 1
+    fi
 
     print_info "Запуск контейнеров..."
-    docker compose up -d
+    if docker compose up -d; then
+        print_success "Контейнеры запущены"
+    else
+        print_error "Ошибка при запуске контейнеров"
+        exit 1
+    fi
 
     print_info "Ожидание запуска сервисов..."
     sleep 15
@@ -738,6 +753,7 @@ build_and_run_docker() {
     else
         print_warning "Некоторые контейнеры могут быть не запущены"
         print_info "Проверьте статус: docker compose ps"
+        print_info "Проверьте логи: docker compose logs"
     fi
 }
 
