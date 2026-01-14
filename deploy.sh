@@ -762,16 +762,46 @@ seed_database() {
     print_step "Заполнение базы данных тестовыми данными"
 
     print_info "Проверка наличия данных в базе..."
+    
+    # Даем время на запуск контейнера
+    sleep 10
+    
+    print_info "Запуск скрипта seed_data.py с проверкой..."
+    
+    # Запускаем скрипт с проверкой
+    if docker compose exec -T backend python -c "
+import sys
+sys.path.append('/app')
+from app.database import SessionLocal
+from app.models.product import Product
 
-    sleep 5
-
-    print_info "Запуск скрипта seed_data.py..."
-    docker compose exec -T backend python backend/seed_data.py
-
-    if [ $? -eq 0 ]; then
-        print_success "База данных успешно заполнена"
+try:
+    with SessionLocal() as db:
+        count = db.query(Product).count()
+        if count > 0:
+            print(f'Database already has {count} products')
+            sys.exit(42)  # специальный код для пропуска
+        else:
+            print('Database is empty')
+            sys.exit(0)
+except Exception as e:
+    print(f'Error checking: {e}')
+    sys.exit(1)
+" 2>/dev/null; then
+        EXIT_CODE=$?
+        
+        if [ $EXIT_CODE -eq 42 ]; then
+            print_success "База данных уже содержит данные. Пропускаем seed."
+            return 0
+        elif [ $EXIT_CODE -eq 0 ]; then
+            print_info "База данных пуста. Заполняем тестовыми данными..."
+            docker compose exec -T backend python backend/seed_data.py
+            print_success "База данных успешно заполнена"
+        else
+            print_warning "Не удалось проверить базу данных"
+        fi
     else
-        print_warning "Возможно, база уже содержит данные"
+        print_warning "Не удалось подключиться к базе данных"
     fi
 }
 
