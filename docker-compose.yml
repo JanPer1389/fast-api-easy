@@ -23,7 +23,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: DockerFile
       args:
         - VITE_API_BASE_URL=https://${DOMAIN}/api
     container_name: fashop_frontend
