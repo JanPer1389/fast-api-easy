@@ -1,14 +1,12 @@
-version: '3.8'
-
 services:
   backend:
     build: 
-      context: .
-      dockerfile: backend/DockerFile
+      context: ./backend
+      dockerfile: DockerFile
     container_name: fashop_backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
-      -./backend:/app
+      - ./backend:/app
       - backend_static:/app/static
     environment:
       - APP_NAME=${APP_NAME:-FastAPI Shop}
@@ -20,6 +18,7 @@ services:
     restart: unless-stopped
     networks:
       - fashop_network
+
 
   frontend:
     build:
