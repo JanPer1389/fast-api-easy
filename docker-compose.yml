@@ -2,7 +2,7 @@ services:
   backend:
     build: 
       context: ./backend
-      dockerfile: DockerFile
+      dockerfile: Dockerfile
     container_name: fashop_backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     volumes:
@@ -23,7 +23,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: DockerFile
+      dockerfile: Dockerfile
       args:
         - VITE_API_BASE_URL=https://${DOMAIN}/api
     container_name: fashop_frontend
